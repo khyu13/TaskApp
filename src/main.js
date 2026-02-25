@@ -2,7 +2,7 @@ import { createTask, addTask, toggleTask, removeTask, getStats } from './tasks.j
 
 let tasks = [];
 
-// ---- Elementos del DOM ----
+// ---- Elementos del DOM -----
 const form      = document.getElementById('task-form');
 const input     = document.getElementById('task-input');
 const listEl    = document.getElementById('task-list');
