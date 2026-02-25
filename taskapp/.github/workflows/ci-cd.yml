@@ -1,0 +1,79 @@
+name: CI / CD — TaskApp
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ──────────────────────────────────────────
+  # Job 1 — Tests
+  # Se ejecuta en TODOS los push y pull_request a main
+  # ──────────────────────────────────────────
+  test:
+    name: Ejecutar tests unitarios
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar tests
+        run: npm run test
+
+  # ──────────────────────────────────────────
+  # Job 2 — Build y push a Docker Hub
+  # Solo se ejecuta en push a main (no en PRs)
+  # ──────────────────────────────────────────
+  docker:
+    name: Build y push imagen de producción
+    runs-on: ubuntu-latest
+    needs: test  # Solo se ejecuta si los tests pasan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extraer metadatos (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/taskapp
+          tags: |
+            # Tag "latest" en cada push a main
+            type=raw,value=latest
+            # Tag con el SHA corto del commit para trazabilidad
+            type=sha,prefix=,format=short
+
+      - name: Build y push imagen de producción
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # El target "production" incluye automáticamente test + build
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Caché para acelerar builds sucesivos
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
